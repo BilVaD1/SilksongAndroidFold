@@ -138,7 +138,10 @@ public class DsPresentation
                 waited += Mathf.Min(Time.unscaledDeltaTime, 0.1f);
                 if (waited > 5f)
                 {
-                    Debug.LogError("[DualScreen] secondary surface/input did not become ready");
+                    if (DualScreenV2.PanelState() == 0)
+                        Debug.Log("[DualScreen] the foldable panel is folded away; waiting for it");
+                    else
+                        Debug.LogError("[DualScreen] secondary surface/input did not become ready");
                     Suspend();
                     DsTouch.Stop();
                     yield break;

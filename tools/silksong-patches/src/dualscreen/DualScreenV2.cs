@@ -115,6 +115,12 @@ public class DualScreenV2 : MonoBehaviour
 
             SetActive(!_paused);
             Debug.Log("[DualScreen] ready");
+            // A foldable started flat: the panel is up, but not on screen.
+            if (PanelState() == 0)
+            {
+                Debug.Log("[DualScreen] panel folded away; suspended");
+                SetActive(false);
+            }
         }
         finally { _bringingUp = false; }
     }
@@ -137,13 +143,42 @@ public class DualScreenV2 : MonoBehaviour
         shell.Register(new DsMapScreen(), InventoryPaneList.PaneTypes.Map);
     }
 
+    // Polled once a second, for two things Unity does not announce.
+    //
+    // Unity does not always raise onDisplaysUpdated: a presentation display
+    // that appeared after startup showed up in Display.displays with no event.
+    //
+    // And on a foldable the panel comes and goes without the display doing
+    // so. Half folded, the activity shows the game's second display in the
+    // bottom half of the screen (TabletopMode); flat, it sends that display's
+    // output somewhere unseen. The display and Unity's surface on it stay put
+    // the whole session -- Unity crashed when either changed under it -- so
+    // the panel is suspended here, exactly as on a pause, while it is folded
+    // away, which also puts the HUD back on the main screen.
+    float _nextDisplayPoll;
+
     void Update()
     {
+        if (Time.unscaledTime >= _nextDisplayPoll)
+        {
+            _nextDisplayPoll = Time.unscaledTime + 0.25f;
+            int panel = PanelState();
+            if (Display.displays.Length != _displayCount) OnDisplaysUpdated();
+            else if (panel == 0 && _screen != null && _screen.Ready)
+            {
+                Debug.Log("[DualScreen] panel folded away; suspended");
+                SetActive(false);
+            }
+            else if (panel == 1 && !_paused && !_bringingUp && (_screen == null || !_screen.Ready)
+                     && Display.displays.Length > DsPresentation.DISPLAY)
+                StartCoroutine(Reacquire());
+        }
         if (_paused || _screen == null || !_screen.Ready) return;
         if (!DsTouch.Ready)
         {
             SetActive(false);
-            StartCoroutine(Reacquire());
+            // Folded away: nothing to reacquire until it is shown again.
+            if (PanelState() != 0) StartCoroutine(Reacquire());
             return;
         }
 
@@ -264,6 +299,30 @@ public class DualScreenV2 : MonoBehaviour
             // A panel appeared -- either back after an unplug, or for the first
             // time on a device that started without one.
             StartCoroutine(Reacquire());
+        }
+    }
+
+    static AndroidJavaObject _panelActivity;
+    static bool _noPanelState;
+
+    /// <summary>
+    /// The activity's foldable panel: -1 none (a real second screen, or no
+    /// foldable support in this APK), 1 on screen, 0 folded away.
+    /// </summary>
+    public static int PanelState()
+    {
+        if (_noPanelState) return -1;
+        try
+        {
+            if (_panelActivity == null)
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                    _panelActivity = player.GetStatic<AndroidJavaObject>("currentActivity");
+            return _panelActivity != null ? _panelActivity.Call<int>("getPanelState") : -1;
+        }
+        catch (Exception)
+        {
+            _noPanelState = true;
+            return -1;
         }
     }
 

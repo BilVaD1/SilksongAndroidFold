@@ -3,9 +3,16 @@ package dev.silksong.shell;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.res.Configuration;
+import android.graphics.Color;
+import android.graphics.RectF;
 import android.os.Bundle;
+import android.os.SystemClock;
+import android.view.InputDevice;
+import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.View;
+import android.widget.FrameLayout;
 
 import com.unity3d.player.IUnityPlayerLifecycleEvents;
 import com.unity3d.player.UnityPlayerForActivityOrService;
@@ -40,18 +47,140 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     // Name fixed by the engine's native code. Do not rename.
     protected UnityPlayerForActivityOrService mUnityPlayer;
     private SecondaryDisplay secondaryDisplay;
+    // The player's view sits in a root of ours rather than being the content
+    // view itself, so that the on-screen controls can be drawn over it and,
+    // half folded, the panel can sit beside it.
+    private FrameLayout root;
+    private TouchControlsView controls;
+    private TabletopMode tabletop;
+    private boolean controlsHiddenForPad;
 
     @Override protected void onCreate(Bundle savedInstanceState)
     {
         super.onCreate(savedInstanceState);
         // Constructing the player is what starts the engine: it loads the
         // native libraries and brings up the render surface. Everything that
-        // has to be in place first -- the staged libraries, the data package --
+        // has to be in place first -- the staged libraries, the data package -- 
         // is done by GameActivity before it calls up into here.
         secondaryDisplay = new SecondaryDisplay(this);
+        java.util.Map<String, String> settings = ShellSettings.read(this);
+        // Before the player: the engine can only use a second display it
+        // finds when it starts (see TabletopMode.createPanelDisplay).
+        boolean tabletopWanted = ShellSettings.bool(settings, ShellSettings.TABLETOP, false)
+            && ShellSettings.bool(settings, ShellSettings.DUAL_SCREEN, true)
+            && TabletopMode.hasHinge(this);
+        android.hardware.display.VirtualDisplay panelDisplay =
+            tabletopWanted ? TabletopMode.createPanelDisplay(this) : null;
         mUnityPlayer = new UnityPlayerForActivityOrService(this, this);
-        setContentView(mUnityPlayer.getFrameLayout());
-        mUnityPlayer.getFrameLayout().requestFocus();
+        FrameLayout game = mUnityPlayer.getFrameLayout();
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
+        root.addView(game, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        if (ShellSettings.bool(settings, ShellSettings.TOUCH_CONTROLS, false))
+        {
+            controls = new TouchControlsView(this);
+            controls.setKeySink(this::injectKey);
+            root.addView(controls, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+            root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+                if (r - l != or - ol || b - t != ob - ot) root.post(this::loadControls);
+            });
+        }
+        if (panelDisplay != null)
+        {
+            tabletop = new TabletopMode(this, root, game, secondaryDisplay, panelDisplay, active -> loadControls());
+            if (controls != null) controls.setPassthrough(new PanelPassthrough());
+        }
+
+        setContentView(root);
+        game.requestFocus();
+    }
+
+    /** The controls for the current posture, re-read so the editor's changes apply. */
+    private void loadControls()
+    {
+        if (controls == null || root.getWidth() <= 0 || root.getHeight() <= 0) return;
+        boolean half = tabletop != null && tabletop.isActive();
+        int w = root.getWidth(), h = root.getHeight();
+        float strip = (w - TabletopMode.panelWidth(w, h)) / 2f / w;
+        controls.setLayout(ControlsLayout.load(this,
+            half ? ControlsLayout.PROFILE_TABLETOP : ControlsLayout.PROFILE_NORMAL,
+            w, h, strip));
+    }
+
+    private void injectKey(int keyCode, boolean down)
+    {
+        if (mUnityPlayer == null) return;
+        long now = SystemClock.uptimeMillis();
+        KeyEvent event = new KeyEvent(now, now, down ? KeyEvent.ACTION_DOWN : KeyEvent.ACTION_UP,
+            keyCode, 0, 0, KeyCharacterMap.VIRTUAL_KEYBOARD, 0,
+            KeyEvent.FLAG_SOFT_KEYBOARD | KeyEvent.FLAG_KEEP_TOUCH_MODE, InputDevice.SOURCE_KEYBOARD);
+        mUnityPlayer.injectEvent(event);
+    }
+
+    /** Fingers the controls had to take, handed on to the half-folded panel. */
+    private final class PanelPassthrough implements TouchControlsView.Passthrough
+    {
+        @Override public boolean claims(float x, float y)
+        {
+            return tabletop != null && tabletop.isActive() && tabletop.panelRect().contains(x, y);
+        }
+
+        @Override public void touch(int id, int phase, float x, float y, long time)
+        {
+            RectF r = tabletop.panelRect();
+            if (r.isEmpty()) return;
+            secondaryDisplay.forwardPointer(id, phase,
+                (x - r.left) / r.width(), (y - r.top) / r.height(), time);
+        }
+
+        @Override public void cancel(int id)
+        {
+            secondaryDisplay.forwardPointer(id, 4, 0f, 0f, SystemClock.uptimeMillis());
+        }
+    }
+
+    /**
+     * Called by DualScreenV2 through JNI: -1 when there is no foldable panel
+     * (the second screen, if any, is a real one), 1 while the half-folded
+     * panel is on screen, 0 while it is folded away.
+     */
+    public int getPanelState()
+    {
+        return tabletop != null ? tabletop.panelState() : -1;
+    }
+
+    /** Called by the resolution patch (AndroidWindow) through JNI, from Unity's thread. */
+    public int[] getGameViewSize()
+    {
+        return tabletop != null ? tabletop.gameViewSize() : new int[] { 0, 0 };
+    }
+
+    // A physical controller in use: get the touch controls out of the way
+    // until the screen is touched again.
+    private void noticePad(android.view.InputEvent event)
+    {
+        if (controls == null || controlsHiddenForPad) return;
+        int source = event.getSource();
+        if ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+            || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK)
+        {
+            controlsHiddenForPad = true;
+            controls.releaseAll();
+            controls.setVisibility(View.GONE);
+        }
+    }
+
+    @Override public boolean dispatchTouchEvent(MotionEvent event)
+    {
+        if (controlsHiddenForPad && event.getActionMasked() == MotionEvent.ACTION_DOWN)
+        {
+            controlsHiddenForPad = false;
+            controls.setVisibility(View.VISIBLE);
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     @Override protected void onDestroy()
@@ -60,6 +189,8 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
         // Activity is still fully alive for that.
         if (secondaryDisplay != null) secondaryDisplay.onDestroy();
         if (mUnityPlayer != null) mUnityPlayer.destroy();
+        // After the player: it must not be drawing to the panel when that goes.
+        if (tabletop != null) tabletop.onDestroy();
         super.onDestroy();
     }
 
@@ -92,12 +223,17 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     {
         super.onResume();
         if (mUnityPlayer != null) mUnityPlayer.onResume();
+        if (tabletop != null) tabletop.onResume();
+        // Back from the editor, or from anywhere the layout could have changed.
+        loadControls();
     }
 
     @Override protected void onPause()
     {
         super.onPause();
         if (mUnityPlayer != null) mUnityPlayer.onPause();
+        if (tabletop != null) tabletop.onPause();
+        if (controls != null) controls.releaseAll();
     }
 
     @Override protected void onNewIntent(Intent intent)
@@ -130,11 +266,12 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     }
 
     // Input. The render surface receives most events on its own, but events
-    // that arrive at the Activity instead have to be handed over explicitly --
+    // that arrive at the Activity instead have to be handed over explicitly -- 
     // gamepad buttons and sticks in particular, which is the difference
     // between a controller working and appearing dead.
     @Override public boolean onKeyDown(int keyCode, KeyEvent event)
     {
+        noticePad(event);
         return injected(event) || super.onKeyDown(keyCode, event);
     }
 
@@ -145,6 +282,7 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
 
     @Override public boolean onGenericMotionEvent(MotionEvent event)
     {
+        noticePad(event);
         return injected(event) || super.onGenericMotionEvent(event);
     }
 

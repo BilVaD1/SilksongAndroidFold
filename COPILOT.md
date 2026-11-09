@@ -291,6 +291,23 @@ To the on-device compile:
 | `JOBS=n` | compile parallelism (default: core count) |
 | `FULL=1` | rebuild every translation unit |
 
+To the running game, as files in its external files directory:
+
+| | |
+| --- | --- |
+| `tabletop_force` | `1` behaves as half folded, `0` as flat; delete it to go back to the hinge sensor. Re-read every second, so half-folded mode can be tested without folding anything |
+
+```sh
+F=/sdcard/Android/data/com.jakobkhansen.silksong/files/tabletop_force
+adb shell "run-as com.jakobkhansen.silksong sh -c 'echo 1 > $F'"   # needs DEBUGGABLE=1
+```
+
+## Shell sources
+
+`tools/depot-to-apk/shell/*.java` is compiled by `build.sh` with no
+`-encoding`, which on Windows means windows-1252: keep those files ASCII and
+write anything else in string literals as `\uXXXX`.
+
 ## Logs
 
 On the device, under `/sdcard/Android/data/<pkg>/files/build/`:

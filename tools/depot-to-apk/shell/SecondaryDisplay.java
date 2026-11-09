@@ -205,12 +205,39 @@ final class SecondaryDisplay implements SurfaceHolder.Callback
 
     private boolean onTouch(View view, MotionEvent event)
     {
+        return handleTouch(event, view.getWidth(), view.getHeight());
+    }
+
+    /**
+     * Touches for a panel that has no touchscreen of its own.
+     *
+     * Half folded, the "second display" is a virtual one shown inside our own
+     * window (see TabletopMode), so its touches arrive on the view showing it
+     * rather than on Unity's presentation. Same coordinates: that view and the
+     * virtual display are the same size.
+     */
+    void forwardTouch(MotionEvent event, int width, int height)
+    {
+        handleTouch(event, width, height);
+    }
+
+    /** One pointer, already normalised to the panel: for a finger another view owns. */
+    void forwardPointer(int id, int phase, float nx, float ny, long time)
+    {
+        if (!enabled || !started) return;
+        // Pointer ids from another view's gesture can collide with the panel's
+        // own; keep them apart.
+        if (!touches.offer(id + 1000, phase, nx, ny, time))
+            Log.w(TAG, "Secondary touch queue overflow");
+    }
+
+    private boolean handleTouch(MotionEvent event, int width, int height)
+    {
         if (!enabled || !started) return true;
         updateSurface();
         int action = event.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) discardGesture = false;
         if (discardGesture) return true;
-        int width = view.getWidth(), height = view.getHeight();
         if (width <= 0 || height <= 0)
         {
             Log.w(TAG, "Cancelled touch on an unmeasured secondary surface");

@@ -17,6 +17,8 @@ Steam integration for game files and cloud saves.
 ## Features
 
 - **Dual screen**: Full implementation of the in-game menu for dual screen devices. Show map, use items, change your crest and more
+- **Foldables (half-folded)**: Hold a foldable half open like a laptop and the game moves to the top half, with the dual-screen menu on the bottom half (see [On-screen controls and foldables](#on-screen-controls-and-foldables))
+- **On-screen controls (optional)**: Touch buttons and a floating stick, movable and resizable, and GameHub layouts (`.gtheme`) can be imported
 - **Steam integration (optional)**: Sign in to Steam if you want the app to download game files and/or your Steam cloud saves for you
 - **High performance**: Compiles to native arm64 via IL2CPP and uses Vulkan shaders
 - **Fully open source and legal**: Supply your own game files either manually or through Steam sign-in (the app downloads them for you)
@@ -118,6 +120,32 @@ Built and played on device. Links go to the page each was downloaded from.
 
 If a mod is not working for you, feel free to open an issue, but I cannot guarantee that
 all mods will be supported.
+
+## On-screen controls and foldables
+
+Both are in the launcher's settings, and both are off by default.
+
+**On-screen controls.** Touch buttons and a floating stick drawn over the game.
+They press the same keyboard keys the PC version uses (arrows to move, Z, X, C
+and so on), so the game's own bindings apply. **Edit layout** opens the editor:
+tap a control to select it, drag to move it, pinch or use −/+ to resize it, hide
+the ones you don't need, and set the opacity. There are two layouts to edit,
+*Full screen* and *Half folded*, because a half-open foldable is held
+differently. The controls hide while a controller is in use and come back on
+the next touch.
+
+**GameHub layouts.** A layout made in GameHub's *Keys and layout* editor for the
+PC game works as-is: export or download it as a `.gtheme` file and choose
+**Import GameHub layout**. Its icons come along, and **Use built-in** goes back
+to the plain layout. Your position edits are kept separately from the layout
+file.
+
+**Half-folded mode** (needs *Dual screen* on). On a book-style foldable such as
+the Galaxy Z Fold, held half open with the hinge across the middle, the game
+takes the top half and the dual-screen menu appears in the middle of the bottom
+half, with room for the on-screen controls on either side. Open the phone flat
+and the game takes the whole screen again. It uses the hinge sensor, so phones
+without one are unaffected.
 
 ## Steam Cloud Saves
 

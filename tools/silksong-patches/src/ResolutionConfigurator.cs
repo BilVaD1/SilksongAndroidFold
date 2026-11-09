@@ -411,6 +411,7 @@ static class AndroidWindow
                 // exists, and it exists a moment later.
                 if (activity == null) return false;
 
+                if (FromGameView(activity, out width, out height)) return true;
                 if (Sdk() >= 30 && FromMetrics(activity, out width, out height)) return true;
                 if (FromDecor(activity, out width, out height)) return true;
                 if (FromDisplay(activity, out width, out height)) return true;
@@ -428,6 +429,38 @@ static class AndroidWindow
         width = 0;
         height = 0;
         return false;
+    }
+
+    static bool _noGameView;
+
+    /// <summary>
+    /// The game's own view, when it is not the whole window.
+    ///
+    /// Half folded, the activity gives the game the top half and the
+    /// dual-screen panel the bottom (TabletopMode). The window is unchanged,
+    /// so measuring the window would have ResolutionGuard stretch a half-height
+    /// view to the whole window's shape. The activity knows which rectangle the
+    /// game has; null means "the window", and the measures below apply.
+    /// </summary>
+    static bool FromGameView(AndroidJavaObject activity, out int width, out int height)
+    {
+        width = 0;
+        height = 0;
+        if (_noGameView) return false;
+        try
+        {
+            int[] size = activity.Call<int[]>("getGameViewSize");
+            if (size == null || size.Length < 2 || size[0] <= 0 || size[1] <= 0) return false;
+            width = size[0];
+            height = size[1];
+            return true;
+        }
+        catch (System.Exception)
+        {
+            // An activity from before this existed. Not worth asking again.
+            _noGameView = true;
+            return false;
+        }
     }
 
     static AndroidJavaObject Activity()

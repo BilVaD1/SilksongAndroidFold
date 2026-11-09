@@ -231,6 +231,12 @@ step_5_apk_shell() {
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+        <activity android:name="dev.silksong.shell.ControlsEditorActivity"
+            android:exported="false" android:process=":launcher"
+            android:screenOrientation="sensorLandscape"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
         <activity android:name="dev.silksong.launcher.ModsActivity"
             android:exported="false" android:process=":launcher"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
@@ -419,15 +425,13 @@ EOF
     # Unity's own UnityPlayerActivity.java used to be compiled in here too;
     # PlayerActivity replaces it for the same reason.
     mkdir -p "$sh/src"
-    cp -f "$SCRIPT_DIR/shell/GameActivity.java" "$sh/src/"
-    cp -f "$SCRIPT_DIR/shell/PlayerActivity.java" "$sh/src/"
-    cp -f "$SCRIPT_DIR/shell/SecondaryDisplay.java" "$sh/src/"
+    cp -f "$SCRIPT_DIR"/shell/*.java "$sh/src/"
 
     local unity_classes="$VARIATION/Classes/classes.jar"
     local cp="$unity_classes:$android_jar"
     # fixed: never changes between rebuilds. changed: rebuilt every time.
     local fixed=() changed=()
-    local srcs=("$sh/src/PlayerActivity.java" "$sh/src/GameActivity.java" "$sh/src/SecondaryDisplay.java")
+    local srcs=("$sh/src"/*.java)
     if (( have_launcher )); then
         cp="$cp:$sh/aar/classes.jar"
         changed+=("$sh/aar/classes.jar")

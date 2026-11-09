@@ -29,6 +29,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
 
 class SettingsActivity : Activity() {
 
@@ -40,6 +42,8 @@ class SettingsActivity : Activity() {
     private lateinit var swDualScreen: Switch
     private lateinit var swShowTopHud: Switch
     private lateinit var swWideAspect: Switch
+    private lateinit var swTabletop: Switch
+    private lateinit var swTouchControls: Switch
     private lateinit var btnClearBuild: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -91,6 +95,7 @@ class SettingsActivity : Activity() {
         swDualScreen.setOnCheckedChangeListener { _, checked ->
             settings.dualScreen = checked
             swShowTopHud.isEnabled = checked
+            swTabletop.isEnabled = checked
             LauncherLog.log("Settings: dual screen → $checked (next game launch; requires DualScreen build)")
         }
         swShowTopHud.setOnCheckedChangeListener { _, checked ->
@@ -101,6 +106,34 @@ class SettingsActivity : Activity() {
             settings.wideAspect = checked
             LauncherLog.log("Settings: unlock aspect ratio → $checked (takes effect on next game launch)")
         }
+
+        swTabletop = findViewById(R.id.sw_tabletop)
+        swTabletop.isChecked = settings.tabletopMode
+        swTabletop.isEnabled = swDualScreen.isChecked
+        swTabletop.setOnCheckedChangeListener { _, checked ->
+            settings.tabletopMode = checked
+            LauncherLog.log("Settings: half-folded mode → $checked (takes effect on next game launch)")
+        }
+
+        swTouchControls = findViewById(R.id.sw_touch_controls)
+        swTouchControls.isChecked = settings.touchControls
+        swTouchControls.setOnCheckedChangeListener { _, checked ->
+            settings.touchControls = checked
+            LauncherLog.log("Settings: on-screen controls → $checked (takes effect on next game launch)")
+        }
+        findViewById<Button>(R.id.btn_edit_controls).setOnClickListener { openControlsEditor() }
+        findViewById<Button>(R.id.btn_import_controls).setOnClickListener {
+            val pick = Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*")
+            runCatching { startActivityForResult(pick, REQUEST_IMPORT_CONTROLS) }
+                .onFailure { LauncherLog.log("controls: no file picker", it) }
+        }
+        findViewById<Button>(R.id.btn_builtin_controls).setOnClickListener {
+            ControlsImport.useBuiltIn(this)
+            showControlsLayout()
+        }
+        showControlsLayout()
 
         btnBack.setOnClickListener { finish() }
 
@@ -116,6 +149,47 @@ class SettingsActivity : Activity() {
         findViewById<Button>(R.id.btn_settings_logs).setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
         }
+    }
+
+    private fun showControlsLayout() {
+        val name = ControlsImport.currentName(this)
+        findViewById<TextView>(R.id.tv_controls_layout).text =
+            if (name != null) getString(R.string.settings_controls_layout, name)
+            else getString(R.string.settings_controls_builtin)
+    }
+
+    /**
+     * The editor lives with the controls in the shell (dev.silksong.shell), which
+     * this module is not compiled against, so it is started by name.
+     */
+    private fun openControlsEditor() {
+        try {
+            startActivity(Intent().setClassName(this, "dev.silksong.shell.ControlsEditorActivity"))
+        } catch (t: Throwable) {
+            LauncherLog.log("controls: could not open the editor", t)
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_IMPORT_CONTROLS || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        Thread({
+            val result = runCatching { ControlsImport.import(this, uri) }
+            runOnUiThread {
+                showControlsLayout()
+                val message = result.fold(
+                    { getString(R.string.settings_controls_imported, it) },
+                    { getString(R.string.settings_controls_import_failed, it.message ?: it.javaClass.simpleName) },
+                )
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            }
+        }, "import-controls").start()
+    }
+
+    private companion object {
+        const val REQUEST_IMPORT_CONTROLS = 41
     }
 
     /**

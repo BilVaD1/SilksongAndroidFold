@@ -105,6 +105,27 @@ class SettingsStore(context: Context) {
         set(value) { prefs.edit().putBoolean(KEY_WIDE_ASPECT, value).apply() }
 
     /**
+     * On-screen touch controls, drawn over the game by the activity (see
+     * shell/TouchControlsView.java) and turned into the keyboard keys the
+     * game's own bindings expect. The layout is the built-in one or an
+     * imported GameHub .gtheme, positioned in ControlsEditorActivity. Default
+     * OFF: a handheld with real buttons wants none of it.
+     */
+    var touchControls: Boolean
+        get() = prefs.getBoolean(KEY_TOUCH_CONTROLS, false)
+        set(value) { prefs.edit().putBoolean(KEY_TOUCH_CONTROLS, value).apply() }
+
+    /**
+     * Foldables held half open like a laptop: the game on the top half and the
+     * dual-screen panel on the bottom half (shell/TabletopMode.java). Needs
+     * dual screen on, because the bottom half IS the dual-screen panel; inert
+     * without a hinge sensor. Default OFF.
+     */
+    var tabletopMode: Boolean
+        get() = prefs.getBoolean(KEY_TABLETOP, false)
+        set(value) { prefs.edit().putBoolean(KEY_TABLETOP, value).apply() }
+
+    /**
      * Hands the game the settings it needs, as a file it can read.
      *
      * The launcher runs in its own process, so the game cannot read these
@@ -129,6 +150,8 @@ class SettingsStore(context: Context) {
             append(KEY_DUAL_SCREEN).append('=').append(dualScreen).append('\n')
             append(KEY_SHOW_TOP_HUD).append('=').append(showTopHud).append('\n')
             append(KEY_WIDE_ASPECT).append('=').append(wideAspect).append('\n')
+            append(KEY_TOUCH_CONTROLS).append('=').append(touchControls).append('\n')
+            append(KEY_TABLETOP).append('=').append(tabletopMode).append('\n')
         }
         try {
             val out = File(dir, "game-settings.txt")
@@ -155,5 +178,8 @@ class SettingsStore(context: Context) {
         const val KEY_DUAL_SCREEN = "dualscreen_enabled"
         const val KEY_SHOW_TOP_HUD = "dualscreen_show_top_hud"
         const val KEY_WIDE_ASPECT = "wide_aspect"
+        // Read by the activity (shell/ShellSettings.java), not by a patch.
+        const val KEY_TOUCH_CONTROLS = "touch_controls"
+        const val KEY_TABLETOP = "tabletop_mode"
     }
 }

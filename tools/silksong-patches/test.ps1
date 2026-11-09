@@ -29,8 +29,11 @@ try {
     $javaOut = Join-Path $work 'java'
     New-Item -ItemType Directory -Path $javaOut | Out-Null
     $cp = $unityJar + [System.IO.Path]::PathSeparator + $androidJar.FullName
-    javac --release 17 -nowarn -cp $cp -d $javaOut `
-        (Join-Path $shell 'PlayerActivity.java') (Join-Path $shell 'SecondaryDisplay.java') `
+    # Every shell source but GameActivity: PlayerActivity uses the controls and
+    # tabletop classes beside it.
+    $shellSources = Get-ChildItem -LiteralPath $shell -Filter *.java |
+        Where-Object { $_.Name -ne 'GameActivity.java' } | ForEach-Object { $_.FullName }
+    javac --release 17 -nowarn -cp $cp -d $javaOut @shellSources `
         (Join-Path $tests 'SecondaryDisplayTest.java')
     if ($LASTEXITCODE -ne 0) { throw 'Secondary-display test compilation failed' }
     java -cp ($javaOut + [System.IO.Path]::PathSeparator + $cp) dev.silksong.shell.SecondaryDisplayTest
