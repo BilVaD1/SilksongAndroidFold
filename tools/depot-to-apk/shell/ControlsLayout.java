@@ -120,6 +120,8 @@ final class ControlsLayout
         int vk, defVk;
         /** Added by the player in the editor rather than by the layout. */
         boolean added;
+        /** Hidden by the layout itself (a preset's arrangement), for "reset". */
+        boolean defHidden;
 
         boolean rebound() { return !isJoystick() && vk != defVk; }
 
@@ -147,6 +149,15 @@ final class ControlsLayout
     }
 
     static File themeDir(Context context) { return new File(dir(context), "theme"); }
+
+    /**
+     * A preset's own arrangement, inside its .gtheme beside layout.json:
+     * { "name": ..., "profiles": { "normal"|"tabletop": { id: {x, y, scale, hidden} } } }
+     * GameHub has one arrangement per layout; this port has two postures, so a
+     * preset can say where its controls go in each. These are the layout's
+     * defaults -- what Reset returns to -- not the player's edits.
+     */
+    static final String PRESET_FILE = "silksong.json";
     static File userFile(Context context) { return new File(dir(context), "user.json"); }
 
     /**
@@ -191,11 +202,13 @@ final class ControlsLayout
             rowInStrip(middle, windowW, windowH, stripFraction,
                 context.getResources().getDisplayMetrics().density);
         }
+        if (layout.themed) layout.applyPresetDefaults(new File(themeDir, PRESET_FILE));
         for (Control c : layout.controls)
         {
             c.defX = c.x;
             c.defY = c.y;
             c.defScale = c.scale;
+            c.defHidden = c.hidden;
         }
         layout.applyEdits(context);
         return layout;
@@ -213,7 +226,7 @@ final class ControlsLayout
             c.x = c.defX;
             c.y = c.defY;
             c.scale = c.defScale;
-            c.hidden = false;
+            c.hidden = c.defHidden;
         }
         opacity = 0.85f;
     }
@@ -233,7 +246,7 @@ final class ControlsLayout
                 // Only what the player changed: a control left alone follows
                 // the layout, including a new layout that reuses its id.
                 boolean moved = Math.abs(c.x - c.defX) > 1e-4f || Math.abs(c.y - c.defY) > 1e-4f
-                    || Math.abs(c.scale - c.defScale) > 1e-4f || c.hidden;
+                    || Math.abs(c.scale - c.defScale) > 1e-4f || c.hidden != c.defHidden;
                 if (!moved && !c.added) continue;
                 JSONObject o = new JSONObject();
                 o.put("x", c.x);
@@ -329,6 +342,33 @@ final class ControlsLayout
         }
     }
 
+    private void applyPresetDefaults(File file)
+    {
+        if (!file.isFile()) return;
+        try
+        {
+            JSONObject root = new JSONObject(readText(file));
+            String presetName = root.optString("name", "");
+            if (!presetName.isEmpty()) name = presetName;
+            JSONObject profiles = root.optJSONObject("profiles");
+            JSONObject mine = profiles != null ? profiles.optJSONObject(profile) : null;
+            if (mine == null) return;
+            for (Control c : controls)
+            {
+                JSONObject o = mine.optJSONObject(c.id);
+                if (o == null) continue;
+                c.x = clamp((float) o.optDouble("x", c.x), 0f, 1f);
+                c.y = clamp((float) o.optDouble("y", c.y), 0f, 1f);
+                c.scale = clamp((float) o.optDouble("scale", c.scale), 0.3f, 4f);
+                c.hidden = o.optBoolean("hidden", c.hidden);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "Ignoring an unreadable preset arrangement", e);
+        }
+    }
+
     private void applyEdits(Context context)
     {
         File file = userFile(context);
@@ -351,7 +391,7 @@ final class ControlsLayout
                 c.x = clamp((float) o.optDouble("x", c.x), 0f, 1f);
                 c.y = clamp((float) o.optDouble("y", c.y), 0f, 1f);
                 c.scale = clamp((float) o.optDouble("scale", c.scale), 0.3f, 4f);
-                c.hidden = o.optBoolean("hidden", false);
+                c.hidden = o.optBoolean("hidden", c.hidden);
             }
         }
         catch (Exception e)

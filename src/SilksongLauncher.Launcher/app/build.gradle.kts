@@ -386,6 +386,18 @@ val stageIo by tasks.registering(Sync::class) {
 }
 tasks.named("preBuild") { dependsOn(stageIo) }
 
+// On-screen controls presets: GameHub layouts (.gtheme) offered in the
+// launcher's "Choose layout" without downloading anything. They come from the
+// repository's controls-presets folder, which is deliberately not committed --
+// a community layout's art belongs to its author -- so a public build ships
+// none and a local build ships whatever that folder holds. Sync, so a preset
+// removed from the folder leaves the APK too.
+val stageControlsPresets by tasks.registering(Sync::class) {
+    from(rootProject.file("../../controls-presets")) { include("*.gtheme") }
+    into(layout.projectDirectory.dir("src/main/assets/controls-presets"))
+}
+tasks.named("preBuild") { dependsOn(stageControlsPresets) }
+
 // mod-weaver: the build-time chainloader. Same arrangement as bundle-surgery
 // -- a small framework-dependent .NET app built on a PC, carried in the APK,
 // run on the device by the .NET that is already there.

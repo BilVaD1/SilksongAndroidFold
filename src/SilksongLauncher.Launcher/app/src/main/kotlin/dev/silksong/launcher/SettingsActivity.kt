@@ -129,10 +129,7 @@ class SettingsActivity : Activity() {
             runCatching { startActivityForResult(pick, REQUEST_IMPORT_CONTROLS) }
                 .onFailure { LauncherLog.log("controls: no file picker", it) }
         }
-        findViewById<Button>(R.id.btn_builtin_controls).setOnClickListener {
-            ControlsImport.useBuiltIn(this)
-            showControlsLayout()
-        }
+        findViewById<Button>(R.id.btn_builtin_controls).setOnClickListener { chooseLayout() }
         showControlsLayout()
 
         btnBack.setOnClickListener { finish() }
@@ -149,6 +146,40 @@ class SettingsActivity : Activity() {
         findViewById<Button>(R.id.btn_settings_logs).setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
         }
+    }
+
+    /**
+     * The built-in layout, or one of the presets built into this APK (see
+     * ControlsImport.presets). Choosing a preset is an import from the APK,
+     * so it starts from the preset's own arrangement, as an import does.
+     */
+    private fun chooseLayout() {
+        val presets = ControlsImport.presets(this)
+        val names = listOf(getString(R.string.settings_controls_builtin_name)) +
+            presets.map { ControlsImport.presetLabel(it) }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_choose_controls)
+            .setItems(names.toTypedArray()) { _, which ->
+                if (which == 0) {
+                    ControlsImport.useBuiltIn(this)
+                    showControlsLayout()
+                    return@setItems
+                }
+                val file = presets[which - 1]
+                Thread({
+                    val result = runCatching { ControlsImport.importPreset(this, file) }
+                    runOnUiThread {
+                        showControlsLayout()
+                        val message = result.fold(
+                            { getString(R.string.settings_controls_imported, it) },
+                            { getString(R.string.settings_controls_import_failed, it.message ?: it.javaClass.simpleName) },
+                        )
+                        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                    }
+                }, "preset-controls").start()
+            }
+            .setNegativeButton(R.string.settings_cancel, null)
+            .show()
     }
 
     private fun showControlsLayout() {

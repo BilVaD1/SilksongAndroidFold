@@ -57,7 +57,9 @@
     <string name="settings_controls_builtin">Layout: built-in</string>
     <string name="settings_edit_controls">Edit layout</string>
     <string name="settings_import_controls">Import GameHub layout</string>
-    <string name="settings_builtin_controls">Use built-in</string>
+    <string name="settings_builtin_controls">Choose layout</string>
+    <string name="settings_choose_controls">Choose a layout</string>
+    <string name="settings_controls_builtin_name">Built-in</string>
     <string name="settings_controls_imported">Imported \"%1$s\"</string>
     <string name="settings_controls_import_failed">Could not import that layout: %1$s</string>
     <string name="settings_wide_aspect">Unlock aspect ratio</string>

@@ -51,3 +51,10 @@ src/SilksongLauncher.Launcher/app/src/main/assets/ondevice/
 # Android player module, NuGet packages, and the keystore it materialises from
 # a secret for the length of one build.
 /.ci-cache/
+
+# On-screen controls presets. Community GameHub layouts carry their authors'
+# art, so they stay on the machine that builds with them: drop .gtheme files
+# into controls-presets/ and Gradle stages them into the APK (see the README
+# there). Neither the files nor the staged copies are committed.
+/controls-presets/*.gtheme
+src/SilksongLauncher.Launcher/app/src/main/assets/controls-presets/

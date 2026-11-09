@@ -32,10 +32,35 @@ object ControlsImport {
 
     fun themeDir(context: Context): File = File(controlsDir(context), "theme")
 
+    /**
+     * Layouts built into this APK: the .gtheme files in the repository's
+     * controls-presets folder, staged by Gradle. That folder is not committed --
+     * a community layout's art is its author's -- so a public build has none and
+     * a build made from a checkout that has some offers them here.
+     */
+    private const val PRESETS = "controls-presets"
+
+    fun presets(context: Context): List<String> =
+        runCatching { context.assets.list(PRESETS)?.filter { it.endsWith(".gtheme") }?.sorted() }
+            .getOrNull().orEmpty()
+
+    /** A preset's name as the list shows it: its file name. */
+    fun presetLabel(file: String): String = file.removeSuffix(".gtheme")
+
+    fun importPreset(context: Context, file: String): String =
+        importStream(context, context.assets.open("$PRESETS/$file"))
+
     /** The imported layout's name, or null when the built-in layout is in use. */
     fun currentName(context: Context): String? {
-        val json = File(themeDir(context), "layout.json")
+        val theme = themeDir(context)
+        val json = File(theme, "layout.json")
         if (!json.isFile) return null
+        // A preset can name itself; GameHub's own name is often the one it was copied from.
+        val preset = File(theme, "silksong.json")
+        if (preset.isFile) {
+            runCatching { JSONObject(preset.readText()).optString("name") }
+                .getOrNull()?.takeIf { it.isNotBlank() }?.let { return it }
+        }
         return runCatching {
             JSONObject(json.readText()).optJSONObject("name")
                 ?.optJSONObject("locales")?.optString("default")
@@ -45,6 +70,12 @@ object ControlsImport {
 
     /** Extracts [uri] as the current theme and returns its name. Throws with a readable message. */
     fun import(context: Context, uri: Uri): String {
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("could not open the file")
+        return importStream(context, input)
+    }
+
+    private fun importStream(context: Context, input: java.io.InputStream): String {
         val dir = controlsDir(context)
         dir.mkdirs()
         val staging = File(dir, "theme.importing")
@@ -54,8 +85,6 @@ object ControlsImport {
         var total = 0L
         var entries = 0
         try {
-            val input = context.contentResolver.openInputStream(uri)
-                ?: throw IllegalArgumentException("could not open the file")
             ZipInputStream(input.buffered()).use { zip ->
                 val buf = ByteArray(64 * 1024)
                 while (true) {
