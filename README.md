@@ -136,9 +136,13 @@ the next touch.
 
 **GameHub layouts.** A layout made in GameHub's *Keys and layout* editor for the
 PC game works as-is: export or download it as a `.gtheme` file and choose
-**Import GameHub layout**. Its icons come along, and **Use built-in** goes back
+**Import GameHub layout**. Buttons mapped to keyboard keys press those keys;
+buttons mapped to Xbox controller buttons do what that button does in the
+game (A jumps, X attacks, View opens the inventory, and so on). Its icons come along, and **Use built-in** goes back
 to the plain layout. Your position edits are kept separately from the layout
-file.
+file. In the editor, **Action** changes what the selected button does and
+**+ Add** adds a button for any of the game's actions (Dream Nail, Cast,
+Super Dash and the rest), so a layout that lacks one can still do it.
 
 **Half-folded mode** (needs *Dual screen* on). On a book-style foldable such as
 the Galaxy Z Fold, held half open with the hinge across the middle, the game
@@ -146,6 +150,13 @@ takes the top half and the dual-screen menu appears in the middle of the bottom
 half, with room for the on-screen controls on either side. Open the phone flat
 and the game takes the whole screen again. It uses the hinge sensor, so phones
 without one are unaffected.
+
+**Controllers.** The game's rumble plays on the controller itself (both
+motors), falling back to the phone when no controller is in use. On a
+PlayStation controller (DualShock 4, DualSense, DualSense Edge), **Create**
+opens the inventory and **Options** pauses -- the game only gives those two a
+controller button on the platforms it shipped for, and Android's DualSense
+touchpad click never reaches it.
 
 ## Steam Cloud Saves
 

@@ -193,12 +193,13 @@ public class AndroidRumble : MonoBehaviour
     void LateUpdate()
     {
         RefreshFlags();
-        if (Flag("off", false)) { Stop(); return; }
+        if (Flag("off", false)) { Stop(); PadRumble(0f, 0f); return; }
 
         if (Flag("test", false) && !_testedThisFlagSet)
         {
             _testedThisFlagSet = true;
-            if (EnsureVibrator()) { Play(1f); Debug.Log(Tag + "test pulse"); }
+            if (PadRumble(1f, 1f)) Debug.Log(Tag + "test pulse on the controller");
+            else if (EnsureVibrator()) { Play(1f); Debug.Log(Tag + "test pulse"); }
             return;
         }
 
@@ -210,6 +211,7 @@ public class AndroidRumble : MonoBehaviour
         if (VibrationManager.VibrationSetting == VibrationManager.VibrationSettings.Off)
         {
             Stop();
+            PadRumble(0f, 0f);
             return;
         }
 
@@ -217,6 +219,17 @@ public class AndroidRumble : MonoBehaviour
         if (mixer == null) { Stop(); return; }
 
         GamepadVibrationMixer.GamepadVibrationEmission.Values v = mixer.CurrentValues;
+
+        // A controller with motors gets both of them, as the game mixed them.
+        // Its effect is shorter than two refreshes, so it is re-sent every
+        // refresh while there is anything to play; the phone stays still.
+        float scale = Num("scale", 1f);
+        float large = Mathf.Clamp01(v.Large * scale), small = Mathf.Clamp01(v.Small * scale);
+        if (PadRumble(large < MinAmplitude ? 0f : large, small < MinAmplitude ? 0f : small))
+        {
+            if (_playing >= 0f) Stop();
+            return;
+        }
 
         // One actuator, two motors: take the louder rather than the sum, so a
         // clip that already drives one motor to full is not distorted.
@@ -234,6 +247,33 @@ public class AndroidRumble : MonoBehaviour
     }
 
     bool _testedThisFlagSet;
+
+    // -- the controller ------------------------------------------------------
+    //
+    // The game's own path to a controller's motors is the Input System's
+    // Gamepad.SetMotorSpeeds, which does nothing on Android. The activity can
+    // reach them (shell/PadRumble.java), so the values go there first.
+    AndroidJavaObject _activity;
+    bool _noPad;
+
+    bool PadRumble(float large, float small)
+    {
+        if (_noPad) return false;
+        try
+        {
+            if (_activity == null)
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                    _activity = player.GetStatic<AndroidJavaObject>("currentActivity");
+            return _activity != null && _activity.Call<bool>("playPadRumble", large, small);
+        }
+        catch (Exception e)
+        {
+            // An activity from before this existed.
+            _noPad = true;
+            Debug.Log(Tag + "no controller rumble: " + e.Message);
+            return false;
+        }
+    }
 
     // Say that this is a GAME rumble, not touch feedback.
     //

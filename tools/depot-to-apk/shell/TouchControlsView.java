@@ -522,6 +522,8 @@ final class TouchControlsView extends View
                 fill.setAlpha(Math.round(Math.min(255, (c.pressedFill >>> 24)) * alpha));
                 canvas.drawPath(path, fill);
             }
+            // Its art shows what it used to do; say what it does now.
+            if (c.rebound()) drawBadge(canvas, ControlsLayout.actionName(c.vk), rect, alpha);
             return;
         }
 
@@ -536,12 +538,26 @@ final class TouchControlsView extends View
         stroke.setColor(down ? c.pressedStroke : c.stroke);
         stroke.setAlpha(Math.round(Math.max(0x60, stroke.getAlpha()) * alpha));
         canvas.drawPath(path, stroke);
-        if (c.label != null && !c.label.isEmpty())
+        String label = c.added || c.rebound() ? ControlsLayout.actionName(c.vk) : c.label;
+        if (label != null && !label.isEmpty())
         {
-            text.setTextSize(Math.min(rect.height() * 0.38f, rect.width() * 0.8f / Math.max(1, c.label.length()) * 1.6f));
+            text.setTextSize(Math.min(rect.height() * 0.38f, rect.width() * 0.8f / Math.max(1, label.length()) * 1.6f));
             text.setAlpha(Math.round(230 * alpha));
-            canvas.drawText(c.label, rect.centerX(), rect.centerY() - (text.descent() + text.ascent()) / 2f, text);
+            canvas.drawText(label, rect.centerX(), rect.centerY() - (text.descent() + text.ascent()) / 2f, text);
         }
+    }
+
+    private void drawBadge(Canvas canvas, String label, RectF r, float alpha)
+    {
+        text.setTextSize(Math.max(10f * density, r.height() * 0.2f));
+        float w = text.measureText(label) + 8f * density, h = text.getTextSize() * 1.3f;
+        RectF b = new RectF(r.centerX() - w / 2f, r.bottom - h * 0.6f, r.centerX() + w / 2f, r.bottom + h * 0.4f);
+        fill.setStyle(Paint.Style.FILL);
+        fill.setColor(0xCC000000);
+        fill.setAlpha(Math.round(0xCC * alpha));
+        canvas.drawRoundRect(b, h / 2f, h / 2f, fill);
+        text.setAlpha(Math.round(240 * alpha));
+        canvas.drawText(label, b.centerX(), b.centerY() - (text.descent() + text.ascent()) / 2f, text);
     }
 
     private void drawStick(Canvas canvas, ControlsLayout.Control c, float alpha)

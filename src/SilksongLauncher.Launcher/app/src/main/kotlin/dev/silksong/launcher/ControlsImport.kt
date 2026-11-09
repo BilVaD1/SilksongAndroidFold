@@ -98,6 +98,13 @@ object ControlsImport {
                 throw IllegalStateException("could not install the layout")
             }
             old.deleteRecursively()
+            // The player's edits belong to the layout they were made on.
+            // Layouts are often made from one another and keep its control
+            // ids, so stale edits would otherwise drag the new layout's
+            // controls back to where the old one had them.
+            if (File(dir, "user.json").delete()) {
+                LauncherLog.log("controls: cleared the edits made to the previous layout")
+            }
             val name = currentName(context) ?: "Imported layout"
             LauncherLog.log("controls: imported \"$name\" (${controls.length()} controls, $total bytes)")
             return name

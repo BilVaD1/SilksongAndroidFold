@@ -35,7 +35,8 @@ public class ControlsEditorActivity extends Activity
     private FrameLayout root;
     private TouchControlsView view;
     private LinearLayout toolbar;
-    private TextView profileNormal, profileTabletop, sizeLabel, hideButton, opacityLabel, title;
+    private TextView profileNormal, profileTabletop, sizeLabel, hideButton, opacityLabel, title, actionButton;
+    private android.widget.HorizontalScrollView toolbarScroll;
     private String profile = ControlsLayout.PROFILE_NORMAL;
     private boolean toolbarAtTop = true;
     private float density;
@@ -168,10 +169,16 @@ public class ControlsEditorActivity extends Activity
 
         toolbar.addView(button("\u2212", v -> resize(1f / 1.1f)));
         sizeLabel = label("\u2014");
+        fixedWidth(sizeLabel, 56);
         toolbar.addView(sizeLabel);
         toolbar.addView(button("+", v -> resize(1.1f)));
         hideButton = button("Hide", v -> toggleHidden());
+        fixedWidth(hideButton, 96);
         toolbar.addView(hideButton);
+        actionButton = button("Action", v -> pickAction());
+        fixedWidth(actionButton, 150);
+        toolbar.addView(actionButton);
+        toolbar.addView(button("+ Add", v -> addButton()));
         toolbar.addView(gap());
 
         toolbar.addView(button("\u25d0\u2212", v -> opacity(-0.1f)));
@@ -182,10 +189,17 @@ public class ControlsEditorActivity extends Activity
 
         toolbar.addView(button("Reset", v -> {
             if (view.getLayout() == null) return;
-            view.getLayout().reset();
-            view.select(null);
-            view.invalidate();
-            updateToolbar();
+            new android.app.AlertDialog.Builder(this)
+                .setMessage("Put every control in this layout back where it started? "
+                    + "Buttons you added are removed and changed actions are undone.")
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("Reset", (d, w) -> {
+                    view.getLayout().reset();
+                    view.select(null);
+                    view.invalidate();
+                    updateToolbar();
+                })
+                .show();
         }));
         toolbar.addView(button("\u21c5", v -> {
             toolbarAtTop = !toolbarAtTop;
@@ -197,7 +211,10 @@ public class ControlsEditorActivity extends Activity
             finish();
         }));
 
-        root.addView(toolbar);
+        toolbarScroll = new android.widget.HorizontalScrollView(this);
+        toolbarScroll.setHorizontalScrollBarEnabled(false);
+        toolbarScroll.addView(toolbar);
+        root.addView(toolbarScroll);
         placeToolbar();
     }
 
@@ -207,7 +224,7 @@ public class ControlsEditorActivity extends Activity
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             (toolbarAtTop ? Gravity.TOP : Gravity.BOTTOM) | Gravity.CENTER_HORIZONTAL);
         lp.topMargin = lp.bottomMargin = dp(12);
-        toolbar.setLayoutParams(lp);
+        toolbarScroll.setLayoutParams(lp);
     }
 
     private void switchProfile(String next)
@@ -227,10 +244,57 @@ public class ControlsEditorActivity extends Activity
         updateToolbar();
     }
 
+    /** What the selected button does: one of the game's actions. */
+    private void pickAction()
+    {
+        ControlsLayout.Control c = view.getSelected();
+        if (c == null) { Toast.makeText(this, "Select a button first", Toast.LENGTH_SHORT).show(); return; }
+        if (c.isJoystick()) { Toast.makeText(this, "The stick moves Hornet; it has no action to choose", Toast.LENGTH_SHORT).show(); return; }
+        chooseAction("What should this button do?", vk -> {
+            c.setKey(vk);
+            view.invalidate();
+            updateToolbar();
+        });
+    }
+
+    /** A new button, for an action the layout has no button for. */
+    private void addButton()
+    {
+        ControlsLayout layout = view.getLayout();
+        if (layout == null) return;
+        chooseAction("Add a button for", vk -> {
+            ControlsLayout.Control c = layout.addButton(vk);
+            view.select(c);
+            view.invalidate();
+            Toast.makeText(this, "Added; drag it where you want it", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private interface OnAction { void chosen(int vk); }
+
+    private void chooseAction(String title, OnAction then)
+    {
+        String[] names = new String[ControlsLayout.ACTIONS.length];
+        for (int i = 0; i < names.length; i++) names[i] = ControlsLayout.ACTIONS[i].name;
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(title)
+            .setItems(names, (d, which) -> then.chosen(ControlsLayout.ACTIONS[which].vk))
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
     private void toggleHidden()
     {
         ControlsLayout.Control c = view.getSelected();
         if (c == null) { Toast.makeText(this, "Select a control first", Toast.LENGTH_SHORT).show(); return; }
+        if (c.added)
+        {
+            // A button the player added is removed outright rather than hidden.
+            view.getLayout().controls.remove(c);
+            view.select(null);
+            view.invalidate();
+            return;
+        }
         c.hidden = !c.hidden;
         view.invalidate();
         updateToolbar();
@@ -252,7 +316,8 @@ public class ControlsEditorActivity extends Activity
         highlight(profileTabletop, tabletop);
         ControlsLayout.Control c = view.getSelected();
         sizeLabel.setText(c == null ? "size" : Math.round(c.scale * 100) + "%");
-        hideButton.setText(c != null && c.hidden ? "Show" : "Hide");
+        hideButton.setText(c != null && c.added ? "Remove" : (c != null && c.hidden ? "Show" : "Hide"));
+        actionButton.setText(c == null ? "Action" : c.isJoystick() ? "Stick" : ControlsLayout.actionName(c.vk));
         ControlsLayout layout = view.getLayout();
         opacityLabel.setText(layout == null ? "" : Math.round(layout.opacity * 100) + "%");
     }
@@ -292,6 +357,19 @@ public class ControlsEditorActivity extends Activity
         t.setTextSize(14);
         t.setPadding(dp(8), 0, dp(8), 0);
         return t;
+    }
+
+    /** A width that does not follow the text, for labels that change. */
+    private void fixedWidth(TextView t, float dp)
+    {
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        t.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams lp = t.getLayoutParams() instanceof LinearLayout.LayoutParams
+            ? (LinearLayout.LayoutParams) t.getLayoutParams()
+            : new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.width = dp(dp);
+        t.setLayoutParams(lp);
     }
 
     private View gap()

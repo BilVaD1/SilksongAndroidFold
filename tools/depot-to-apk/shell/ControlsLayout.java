@@ -53,6 +53,45 @@ final class ControlsLayout
     /** A joystick's diameter at scale 1, in dp. */
     static final float JOYSTICK_DP = 120f;
 
+    /**
+     * The game's actions and the key each one has in its default keyboard
+     * layout (InputHandler.MapDefaultKeyboardLayout), which is what a button
+     * presses. Names are the game's own, for the editor's picker; the letters
+     * are the PC defaults, so a layout made for the PC game agrees with them.
+     */
+    static final class Action
+    {
+        final String name;
+        final int vk;
+        Action(String name, int vk) { this.name = name; this.vk = vk; }
+    }
+
+    static final Action[] ACTIONS = {
+        new Action("Jump", 'Z'),
+        new Action("Attack", 'X'),
+        new Action("Dash", 'C'),
+        new Action("Cast", 'A'),
+        new Action("Super Dash", 'S'),
+        new Action("Dream Nail", 'D'),
+        new Action("Quick Cast", 'F'),
+        new Action("Quick Map", 0x09),
+        new Action("Taunt", 'V'),
+        new Action("Inventory", 'I'),
+        new Action("Inventory: Map", 'M'),
+        new Action("Inventory: Journal", 'J'),
+        new Action("Inventory: Tools", 'Q'),
+        new Action("Inventory: Quests", 'T'),
+        new Action("Pause", 0x1B),
+        new Action("Confirm", 0x0D),
+    };
+
+    /** The action a key is the default for, or the key's own name. */
+    static String actionName(int vk)
+    {
+        for (Action a : ACTIONS) if (a.vk == vk) return a.name;
+        return android.view.KeyEvent.keyCodeToString(fromVirtualKey(vk)).replace("KEYCODE_", "");
+    }
+
     static final class Icon
     {
         String path;
@@ -77,6 +116,18 @@ final class ControlsLayout
         float dynamicW, dynamicH;
         /** Where the layout put it, for "reset". */
         float defX, defY, defScale;
+        /** For a button: the Windows virtual key it presses, and the layout's own. */
+        int vk, defVk;
+        /** Added by the player in the editor rather than by the layout. */
+        boolean added;
+
+        boolean rebound() { return !isJoystick() && vk != defVk; }
+
+        void setKey(int newVk)
+        {
+            vk = newVk;
+            keys = new int[] { fromVirtualKey(newVk) };
+        }
 
         boolean isJoystick() { return "joystick".equals(type); }
     }
@@ -130,6 +181,7 @@ final class ControlsLayout
             catch (Exception e) { throw new IllegalStateException(e); }
         }
         layout.parse(theme, layout.themed ? themeDir : null, context);
+        layout.addExtras(context);
 
         if (PROFILE_TABLETOP.equals(profile))
         {
@@ -152,8 +204,12 @@ final class ControlsLayout
     /** Puts every control back where the layout has it. */
     void reset()
     {
+        List<Control> extras = new ArrayList<>();
+        for (Control c : controls) if (c.added) extras.add(c);
+        controls.removeAll(extras);
         for (Control c : controls)
         {
+            if (!c.isJoystick()) c.setKey(c.defVk);
             c.x = c.defX;
             c.y = c.defY;
             c.scale = c.defScale;
@@ -174,6 +230,11 @@ final class ControlsLayout
             JSONObject mine = new JSONObject();
             for (Control c : controls)
             {
+                // Only what the player changed: a control left alone follows
+                // the layout, including a new layout that reuses its id.
+                boolean moved = Math.abs(c.x - c.defX) > 1e-4f || Math.abs(c.y - c.defY) > 1e-4f
+                    || Math.abs(c.scale - c.defScale) > 1e-4f || c.hidden;
+                if (!moved && !c.added) continue;
                 JSONObject o = new JSONObject();
                 o.put("x", c.x);
                 o.put("y", c.y);
@@ -183,6 +244,23 @@ final class ControlsLayout
             }
             profiles.put(profile, mine);
             root.put("profiles", profiles);
+            // What each button presses, and the buttons the player added, are
+            // the same in every profile: only where things sit differs.
+            JSONObject keys = new JSONObject();
+            JSONArray extras = new JSONArray();
+            for (Control c : controls)
+            {
+                if (c.added)
+                {
+                    JSONObject o = new JSONObject();
+                    o.put("id", c.id);
+                    o.put("vk", c.vk);
+                    extras.put(o);
+                }
+                else if (c.rebound()) keys.put(c.id, c.vk);
+            }
+            root.put("keys", keys);
+            root.put("extras", extras);
             root.put("opacity", opacity);
             file.getParentFile().mkdirs();
             File tmp = new File(file.getPath() + ".part");
@@ -199,6 +277,58 @@ final class ControlsLayout
         }
     }
 
+    /** A new button for an action, in the middle of the screen, selected by the editor. */
+    Control addButton(int vk)
+    {
+        Control c = new Control();
+        c.id = "added-" + Long.toHexString(System.currentTimeMillis());
+        initAdded(c, vk);
+        c.x = c.defX = 0.5f;
+        c.y = c.defY = PROFILE_TABLETOP.equals(profile) ? 0.75f : 0.5f;
+        controls.add(c);
+        return c;
+    }
+
+    private static void initAdded(Control c, int vk)
+    {
+        c.type = "button";
+        c.added = true;
+        c.shape = "circle";
+        c.scale = c.defScale = 1.1f;
+        c.fill = 0x55000000;
+        c.stroke = 0x80FFFFFF;
+        c.strokeWidth = 1.5f;
+        c.defVk = vk;
+        c.setKey(vk);
+    }
+
+    private void addExtras(Context context)
+    {
+        File file = userFile(context);
+        if (!file.isFile()) return;
+        try
+        {
+            JSONArray extras = new JSONObject(readText(file)).optJSONArray("extras");
+            if (extras == null) return;
+            for (int i = 0; i < extras.length(); i++)
+            {
+                JSONObject o = extras.optJSONObject(i);
+                if (o == null || !o.has("id")) continue;
+                Control c = new Control();
+                c.id = o.optString("id");
+                initAdded(c, o.optInt("vk", 'D'));
+                // Unplaced in this profile: the middle, as when it was added.
+                c.x = 0.5f;
+                c.y = PROFILE_TABLETOP.equals(profile) ? 0.75f : 0.5f;
+                controls.add(c);
+            }
+        }
+        catch (Exception e)
+        {
+            Log.e(TAG, "Ignoring unreadable added controls", e);
+        }
+    }
+
     private void applyEdits(Context context)
     {
         File file = userFile(context);
@@ -207,6 +337,10 @@ final class ControlsLayout
         {
             JSONObject root = new JSONObject(readText(file));
             opacity = clamp((float) root.optDouble("opacity", opacity), 0.1f, 1f);
+            JSONObject keys = root.optJSONObject("keys");
+            if (keys != null)
+                for (Control c : controls)
+                    if (!c.isJoystick() && !c.added && keys.has(c.id)) c.setKey(keys.optInt(c.id, c.vk));
             JSONObject profiles = root.optJSONObject("profiles");
             JSONObject mine = profiles != null ? profiles.optJSONObject(profile) : null;
             if (mine == null) return;
@@ -323,6 +457,21 @@ final class ControlsLayout
             if (assets != null)
             {
                 c.icon = icon(look, "icon", assets, target);
+                if (c.icon == null && props.has("backgroundImage"))
+                {
+                    JSONObject bg = new JSONObject();
+                    try
+                    {
+                        bg.put("iconName", props.optString("backgroundImage"));
+                        bg.put("scale", parseFloat(props.optString("backgroundScale", "1"), 1f));
+                        bg.put("alpha", parseFloat(props.optString("backgroundAlpha", "1"), 1f));
+                        bg.put("scaleMode", props.optString("backgroundScaleMode", "fit").toLowerCase(java.util.Locale.ROOT));
+                        JSONObject holder = new JSONObject();
+                        holder.put("icon", bg);
+                        c.icon = icon(holder, "icon", assets, target);
+                    }
+                    catch (org.json.JSONException ignored) { }
+                }
                 c.activeIcon = icon(look, "activeIcon", assets, target);
                 c.innerIcon = icon(look, "innerIcon", assets, target);
                 c.outerIcon = icon(look, "outerIcon", assets, target);
@@ -339,6 +488,8 @@ final class ControlsLayout
             }
             else
             {
+                c.vk = virtualKey(map);
+                c.defVk = c.vk;
                 c.keys = new int[] { key(map) };
             }
             controls.add(c);
@@ -385,8 +536,44 @@ final class ControlsLayout
     /** A GameHub mapping to an Android key code, or 0 if it is not a key. */
     private static int key(JSONObject mapping)
     {
-        if (mapping == null || !"keyboard".equals(mapping.optString("class"))) return 0;
-        return fromVirtualKey(mapping.optInt("keyCode", 0));
+        return fromVirtualKey(virtualKey(mapping));
+    }
+
+    /**
+     * The key a mapping presses, as a Windows virtual key. GameHub maps a
+     * control either to a keyboard key or to an Xbox controller button; a
+     * controller button is turned into the key for the same action, using the
+     * game's default controller bindings (measured: InputHandler's bindings for
+     * a pad, A=Jump B=Cast X=Attack Y=Dream Nail, RT=Dash LT=Super Dash,
+     * LB=Quick Map RB=Quick Cast, R3=Taunt, Start=Pause, View=Inventory).
+     */
+    static int virtualKey(JSONObject mapping)
+    {
+        if (mapping == null) return 0;
+        String kind = mapping.optString("class");
+        if ("keyboard".equals(kind)) return mapping.optInt("keyCode", 0);
+        if (!"gamepad".equals(kind)) return 0;
+        switch (mapping.optString("button").toLowerCase(java.util.Locale.ROOT))
+        {
+            case "a": return 'Z';
+            case "b": return 'A';
+            case "x": return 'X';
+            case "y": return 'D';
+            case "lb": case "l1": return 0x09;
+            case "rb": case "r1": return 'F';
+            case "lt": case "l2": return 'S';
+            case "rt": case "r2": return 'C';
+            case "rightstickclick": case "rs": case "r3": return 'V';
+            case "start": case "menu": case "options": return 0x1B;
+            case "select": case "back": case "view": case "share": return 'I';
+            case "dpadup": case "up": return 0x26;
+            case "dpaddown": case "down": return 0x28;
+            case "dpadleft": case "left": return 0x25;
+            case "dpadright": case "right": return 0x27;
+            default:
+                Log.w(TAG, "No key for controller button " + mapping.optString("button"));
+                return 0;
+        }
     }
 
     /** Windows virtual-key code to Android key code. */
@@ -473,14 +660,17 @@ final class ControlsLayout
     private static final String DEFAULT_LAYOUT = "{\"formatVersion\":2,"
         + "\"name\":{\"locales\":{\"default\":\"Built-in\"}},\"controls\":["
         + joystick("move", 0.2179f, 0.6606f, 1.2f)
-        + "," + button("jump", 0.8481f, 0.6315f, 1.1f, 1f, "Z", 'Z', "circle")
-        + "," + button("attack", 0.7824f, 0.7842f, 1.1f, 1f, "X", 'X', "circle")
-        + "," + button("dash", 0.8770f, 0.4523f, 1.1f, 1f, "C", 'C', "circle")
-        + "," + button("q", 0.9168f, 0.7509f, 1.1f, 1f, "Q", 'Q', "circle")
-        + "," + button("f", 0.8512f, 0.9037f, 1.1f, 1f, "F", 'F', "circle")
-        + "," + button("inventory", 0.9551f, 0.4592f, 1.1f, 1f, "I", 'I', "circle")
+        + "," + button("jump", 0.8481f, 0.6315f, 1.1f, 1f, "Jump", 'Z', "circle")
+        + "," + button("attack", 0.7824f, 0.7842f, 1.1f, 1f, "Attack", 'X', "circle")
+        + "," + button("dash", 0.8770f, 0.4523f, 1.1f, 1f, "Dash", 'C', "circle")
+        + "," + button("cast", 0.7000f, 0.6200f, 1.1f, 1f, "Cast", 'A', "circle")
+        + "," + button("superdash", 0.7000f, 0.4500f, 1.0f, 1f, "Super Dash", 'S', "circle")
+        + "," + button("dreamnail", 0.7850f, 0.4700f, 1.0f, 1f, "Dream Nail", 'D', "circle")
+        + "," + button("q", 0.9168f, 0.7509f, 1.1f, 1f, "Tools", 'Q', "circle")
+        + "," + button("f", 0.8512f, 0.9037f, 1.1f, 1f, "Quick Cast", 'F', "circle")
+        + "," + button("inventory", 0.9551f, 0.4592f, 1.1f, 1f, "Inventory", 'I', "circle")
         + "," + button("map", 0.9199f, 0.2995f, 1.2f, 1f, "Map", 0x09, "circle")
-        + "," + button("pause", 0.5405f, 0.8690f, 0.6f, 2.25f, "Esc", 0x1B, "rect")
+        + "," + button("pause", 0.5405f, 0.8690f, 0.6f, 2.25f, "Pause", 0x1B, "rect")
         + "]}";
 
     private static String button(String id, float x, float y, float scale, float aspect,

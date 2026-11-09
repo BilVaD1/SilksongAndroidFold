@@ -296,6 +296,7 @@ To the running game, as files in its external files directory:
 | | |
 | --- | --- |
 | `tabletop_force` | `1` behaves as half folded, `0` as flat; delete it to go back to the hinge sensor. Re-read every second, so half-folded mode can be tested without folding anything |
+| `pad_probe` | `on=1` logs every controller press at each layer -- Android key (`SilksongPadProbe`), Input System control, legacy joystick button and InControl control (`[PadProbe]`) -- and the game's bindings for a PlayStation pad (`[PlayStationPadFix]`). The Android layer is read when the game resumes |
 
 ```sh
 F=/sdcard/Android/data/com.jakobkhansen.silksong/files/tabletop_force
