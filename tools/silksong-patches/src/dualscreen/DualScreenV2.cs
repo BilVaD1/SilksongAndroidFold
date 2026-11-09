@@ -317,7 +317,11 @@ public class DualScreenV2 : MonoBehaviour
             if (_panelActivity == null)
                 using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
                     _panelActivity = player.GetStatic<AndroidJavaObject>("currentActivity");
-            return _panelActivity != null ? _panelActivity.Call<int>("getPanelState") : -1;
+            int state = _panelActivity != null ? _panelActivity.Call<int>("getPanelState") : -1;
+            // No foldable panel is decided when the activity starts and does not
+            // change, so a device without one stops making the JNI call.
+            if (state < 0) _noPanelState = true;
+            return state;
         }
         catch (Exception)
         {

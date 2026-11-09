@@ -177,37 +177,8 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     // Controller events are watched on their way in rather than in onKeyDown:
     // the player's view takes most of them first, and onKeyDown only sees the
     // ones it leaves.
-    // The pad_probe knob (see PadProbe.cs) also logs what Android hands the
-    // activity, below Unity, for anything that is not the touchscreen.
-    private boolean padProbe;
-
-    private void probe(android.view.InputEvent event)
-    {
-        if (!padProbe) return;
-        InputDevice d = event.getDevice();
-        String name = d != null ? d.getName() : "?";
-        if (event instanceof KeyEvent)
-        {
-            KeyEvent k = (KeyEvent) event;
-            if (k.getRepeatCount() > 0) return;
-            android.util.Log.i("SilksongPadProbe", "key " + KeyEvent.keyCodeToString(k.getKeyCode())
-                + (k.getAction() == KeyEvent.ACTION_DOWN ? " DOWN" : " UP") + " src=0x"
-                + Integer.toHexString(k.getSource()) + " '" + name + "'");
-        }
-        else if (event instanceof MotionEvent)
-        {
-            MotionEvent m = (MotionEvent) event;
-            int a = m.getActionMasked();
-            if (a == MotionEvent.ACTION_MOVE || a == MotionEvent.ACTION_HOVER_MOVE) return;
-            android.util.Log.i("SilksongPadProbe", "motion " + MotionEvent.actionToString(a)
-                + " buttons=0x" + Integer.toHexString(m.getButtonState()) + " src=0x"
-                + Integer.toHexString(m.getSource()) + " '" + name + "'");
-        }
-    }
-
     @Override public boolean dispatchKeyEvent(KeyEvent event)
     {
-        probe(event);
         padRumble.notice(event);
         noticePad(event);
         return super.dispatchKeyEvent(event);
@@ -215,7 +186,6 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
 
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event)
     {
-        probe(event);
         padRumble.notice(event);
         noticePad(event);
         return super.dispatchGenericMotionEvent(event);
@@ -233,7 +203,6 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
 
     @Override public boolean dispatchTouchEvent(MotionEvent event)
     {
-        if (event.getSource() != InputDevice.SOURCE_TOUCHSCREEN) probe(event);
         if (controlsHiddenForPad && event.getActionMasked() == MotionEvent.ACTION_DOWN)
         {
             controlsHiddenForPad = false;
@@ -285,8 +254,6 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
         if (tabletop != null) tabletop.onResume();
         // Back from the editor, or from anywhere the layout could have changed.
         loadControls();
-        java.io.File ext = getExternalFilesDir(null);
-        padProbe = ext != null && new java.io.File(ext, "pad_probe").isFile();
     }
 
     @Override protected void onPause()

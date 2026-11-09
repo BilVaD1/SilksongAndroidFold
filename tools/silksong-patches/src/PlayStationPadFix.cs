@@ -3,7 +3,7 @@
 // A PlayStation pad on Android arrives through Unity's Input System as
 // DualShock4GamepadAndroid, which the game's NewUnityInputDevice wraps with
 // the PlayStation 4 style. Every button then reaches the game (measured on a
-// DualSense Edge with PadProbe) -- but the game's InputHandler only binds
+// DualSense Edge, logging every press at each layer) -- but the game's InputHandler only binds
 // Open Inventory and Pause for the gamepad types it ships consoles and PCs
 // with, and a PlayStation pad on this platform is none of them. Both actions
 // had no controller binding at all, so the inventory, the map inside it and
@@ -22,14 +22,11 @@
 //
 // The bindings are the game's own, read at runtime. The game rebuilds them
 // whenever a controller connects or the player remaps, so this checks again
-// every second, and adds nothing twice. With PadProbe's knob on, every binding
-// of every action is logged once per change, so what was added can be seen.
+// every second, and adds nothing twice; each binding it adds is logged once.
 
 #if UNITY_ANDROID && !UNITY_EDITOR
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Text;
 using InControl;
 using UnityEngine;
 
@@ -67,7 +64,6 @@ public class PlayStationPadFix : MonoBehaviour
     }
 
     float _next;
-    string _lastDump = "";
 
     void Update()
     {
@@ -115,7 +111,6 @@ public class PlayStationPadFix : MonoBehaviour
         added += BindIfUnbound(handler.inputActions.OpenInventory, Replacement, device);
         added += BindIfUnbound(handler.inputActions.Pause, Options, device);
 
-        if (added > 0 || ProbeOn()) Dump(handler.inputActions, device);
     }
 
     static readonly InputControlType Options = Controls("Options")[0];
@@ -133,35 +128,6 @@ public class PlayStationPadFix : MonoBehaviour
     static bool IsPlayStation(InputDeviceStyle style)
     {
         return style.ToString().StartsWith("PlayStation", StringComparison.Ordinal);
-    }
-
-    void Dump(PlayerActionSet set, InputDevice device)
-    {
-        var sb = new StringBuilder();
-        foreach (PlayerAction action in set.Actions)
-        {
-            var parts = new List<string>();
-            foreach (BindingSource binding in action.Bindings)
-            {
-                var source = binding as DeviceBindingSource;
-                parts.Add(source != null ? "pad:" + source.Control : binding.BindingSourceType + ":" + binding.Name);
-            }
-            sb.Append(" [").Append(action.Name).Append("]=").Append(string.Join("|", parts));
-        }
-        string now = sb.ToString();
-        if (now == _lastDump) return;
-        _lastDump = now;
-        Debug.Log(Tag + "bindings for '" + device.Name + "' (" + device.DeviceStyle + "):" + now);
-    }
-
-    static bool ProbeOn()
-    {
-        try
-        {
-            string path = Path.Combine(Application.persistentDataPath, "pad_probe");
-            return File.Exists(path) && File.ReadAllText(path).Contains("on=1");
-        }
-        catch (Exception) { return false; }
     }
 }
 #endif
