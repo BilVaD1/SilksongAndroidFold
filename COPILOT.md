@@ -295,12 +295,17 @@ To the running game, as files in its external files directory:
 
 | | |
 | --- | --- |
-| `tabletop_force` | `1` behaves as half folded, `0` as flat; delete it to go back to the hinge sensor. Re-read every second, so half-folded mode can be tested without folding anything |
+| `tabletop_force` | `1` behaves as half folded, `0` as flat; delete it to go back to the device's own posture. Re-read every second, so half-folded mode can be tested without folding anything. Forced half open, the real fold is used when it runs across the window, the window's middle otherwise |
 
 ```sh
 F=/sdcard/Android/data/com.jakobkhansen.silksong/files/tabletop_force
 adb shell "run-as com.jakobkhansen.silksong sh -c 'echo 1 > $F'"   # needs DEBUGGABLE=1
 ```
+
+On a real foldable the posture itself can be overridden instead, which goes
+through the same path as folding the phone (window extensions included):
+`adb shell cmd device_state print-states` lists the states, `adb shell cmd
+device_state state <HALF_OPENED id>` folds it, `... state reset` puts it back.
 
 ## Shell sources
 

@@ -148,12 +148,16 @@ file. In the editor, **Action** changes what the selected button does and
 **+ Add** adds a button for any of the game's actions (Dream Nail, Cast,
 Super Dash and the rest), so a layout that lacks one can still do it.
 
-**Half-folded mode** (needs *Dual screen* on). On a book-style foldable such as
-the Galaxy Z Fold, held half open with the hinge across the middle, the game
-takes the top half and the dual-screen menu appears in the middle of the bottom
-half, with room for the on-screen controls on either side. Open the phone flat
-and the game takes the whole screen again. It uses the hinge sensor, so phones
-without one are unaffected.
+**Half-folded mode** (needs *Dual screen* on). Hold a foldable half open like a
+laptop and the game takes the half above the fold, with the dual-screen menu in
+the middle of the half below it and room for the on-screen controls on either
+side. Open the phone flat and the game takes the whole screen again. The fold's
+position and posture come from the phone itself, so this works on every kind of
+foldable: on a Galaxy Z Fold up to 7 or a Fold Ultra the fold already runs
+across the game, while on a wider, passport-shaped one (Galaxy Z Fold 8, Pixel
+Fold, OnePlus Open) or a flip phone you stand the phone up, and the screen turns
+upright to put the fold across it. The game itself stays landscape. Phones that
+don't fold are unaffected.
 
 **Controllers.** The game's rumble plays on the controller itself (both
 motors), falling back to the phone when no controller is in use. On a

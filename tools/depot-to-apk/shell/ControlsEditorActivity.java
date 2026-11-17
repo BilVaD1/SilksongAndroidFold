@@ -1,7 +1,9 @@
 package dev.silksong.shell;
 
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -25,8 +27,12 @@ import java.util.List;
 //
 // Two profiles, because a foldable held half open is a different shape to
 // hold: "Full screen" for normal play and "Half folded" for tabletop, where the
-// game is the top half and the dual-screen panel sits in the bottom middle.
-// Their outlines are drawn while editing that profile.
+// game is above the fold and the dual-screen panel sits in the middle below it.
+// Their outlines are drawn while editing that profile, split where this
+// device's fold really is (TabletopGeometry). On a device that stands upright
+// to be half folded -- a passport-shaped Fold, a Flip -- the editor turns
+// upright too for that profile, so the layout is edited in the shape it is
+// played in.
 //
 // Opened from the launcher's settings by class name. It needs nothing of
 // Unity's, so it runs in the launcher's process like the other settings.
@@ -40,6 +46,10 @@ public class ControlsEditorActivity extends Activity
     private String profile = ControlsLayout.PROFILE_NORMAL;
     private boolean toolbarAtTop = true;
     private float density;
+    private FoldInfo foldInfo;
+    private FoldInfo.Fold fold;
+    /** This device stands upright when half folded: its fold runs down a landscape window. */
+    private boolean uprightTabletop;
 
     @Override protected void onCreate(Bundle savedInstanceState)
     {
@@ -74,11 +84,61 @@ public class ControlsEditorActivity extends Activity
         root.addView(view, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
+        if (FoldInfo.available())
+            foldInfo = new FoldInfo(this, f -> {
+                fold = f;
+                Rect b = foldInRoot();
+                int w = root.getWidth(), h = root.getHeight();
+                // Judged in a landscape window only; upright, the fold runs across either way.
+                if (b != null && w > h) uprightTabletop = b.height() > b.width();
+                applyOrientation();
+                root.post(this::load);
+            });
+
         buildToolbar();
         setContentView(root);
         root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
             if (r - l != or - ol || b - t != ob - ot) root.post(this::load);
         });
+    }
+
+    @Override protected void onResume()
+    {
+        super.onResume();
+        if (foldInfo != null) foldInfo.start();
+    }
+
+    @Override protected void onPause()
+    {
+        if (foldInfo != null) foldInfo.stop();
+        super.onPause();
+    }
+
+    private Rect foldInRoot()
+    {
+        if (fold == null) return null;
+        Rect b = new Rect(fold.bounds);
+        int[] at = new int[2];
+        root.getLocationInWindow(at);
+        b.offset(-at[0], -at[1]);
+        return b;
+    }
+
+    private void applyOrientation()
+    {
+        boolean upright = uprightTabletop && ControlsLayout.PROFILE_TABLETOP.equals(profile);
+        int want = upright ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            : ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        if (getRequestedOrientation() != want) setRequestedOrientation(want);
+    }
+
+    /** How a half-folded window this shape is split on this device. */
+    private TabletopGeometry tabletopGeometry(int w, int h)
+    {
+        Rect b = foldInRoot();
+        if (b != null && b.width() > b.height() && b.left <= 1 && b.right >= w - 1 && b.top > 0 && b.bottom < h)
+            return new TabletopGeometry(w, h, b.top, b.bottom, density);
+        return TabletopGeometry.halves(w, h, density);
     }
 
     @Override public void onWindowFocusChanged(boolean hasFocus)
@@ -112,17 +172,19 @@ public class ControlsEditorActivity extends Activity
     {
         int w = root.getWidth(), h = root.getHeight();
         if (w <= 0 || h <= 0) return;
-        int pw = TabletopMode.panelWidth(w, h);
-        float strip = (w - pw) / 2f / w;
-        view.setLayout(ControlsLayout.load(this, profile, w, h, strip));
+        boolean tabletop = ControlsLayout.PROFILE_TABLETOP.equals(profile);
+        // Turning upright for this profile: wait for the window to turn.
+        if (tabletop && uprightTabletop && w > h && !isInMultiWindowMode()) return;
+        TabletopGeometry geo = tabletop ? tabletopGeometry(w, h) : null;
+        view.setLayout(ControlsLayout.load(this, profile, w, h, geo));
 
         List<RectF> rects = new ArrayList<>();
         List<String> names = new ArrayList<>();
-        if (ControlsLayout.PROFILE_TABLETOP.equals(profile))
+        if (geo != null)
         {
-            rects.add(new RectF(0, 0, w, h / 2f));
+            rects.add(new RectF(0, 0, w, geo.gameBottom));
             names.add("Game");
-            rects.add(new RectF((w - pw) / 2f, h / 2f, (w + pw) / 2f, h));
+            rects.add(geo.panelF());
             names.add("Dual-screen panel");
         }
         view.setGuides(rects, names);
@@ -232,6 +294,7 @@ public class ControlsEditorActivity extends Activity
         if (next.equals(profile)) return;
         save();
         profile = next;
+        applyOrientation();
         load();
     }
 

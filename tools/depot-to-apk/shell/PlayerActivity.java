@@ -2,6 +2,7 @@ package dev.silksong.shell;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.RectF;
@@ -58,6 +59,10 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     // The engine paused by us for the in-game editor, not by the lifecycle.
     private boolean pausedForEdit;
     private boolean resumed;
+    // Half folded upright (see TabletopMode): the orientation the engine asked
+    // for is kept here and given back when the device is opened flat.
+    private boolean upright;
+    private int engineOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
     private final PadRumble padRumble = new PadRumble();
 
     @Override protected void onCreate(Bundle savedInstanceState)
@@ -73,7 +78,7 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
         // finds when it starts (see TabletopMode.createPanelDisplay).
         boolean tabletopWanted = ShellSettings.bool(settings, ShellSettings.TABLETOP, false)
             && ShellSettings.bool(settings, ShellSettings.DUAL_SCREEN, true)
-            && TabletopMode.hasHinge(this);
+            && TabletopMode.supported(this);
         android.hardware.display.VirtualDisplay panelDisplay =
             tabletopWanted ? TabletopMode.createPanelDisplay(this) : null;
         mUnityPlayer = new UnityPlayerForActivityOrService(this, this);
@@ -115,7 +120,12 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
         }
         if (panelDisplay != null)
         {
-            tabletop = new TabletopMode(this, root, game, secondaryDisplay, panelDisplay, active -> loadControls());
+            tabletop = new TabletopMode(this, root, game, secondaryDisplay, panelDisplay, new TabletopMode.Host()
+            {
+                @Override public void onTabletopChanged(boolean active) { loadControls(); }
+
+                @Override public void setUprightAllowed(boolean allowed) { setUpright(allowed); }
+            });
             if (controls != null) controls.setPassthrough(new PanelPassthrough());
         }
 
@@ -130,12 +140,32 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
         // Mid-edit (the window changed shape, say): keep what was moved so far.
         if (editor != null && editor.isEditing() && controls.getLayout() != null)
             controls.getLayout().save(this);
-        boolean half = tabletop != null && tabletop.isActive();
+        TabletopGeometry geo = tabletop != null ? tabletop.geometry() : null;
         int w = root.getWidth(), h = root.getHeight();
-        float strip = (w - TabletopMode.panelWidth(w, h)) / 2f / w;
         controls.setLayout(ControlsLayout.load(this,
-            half ? ControlsLayout.PROFILE_TABLETOP : ControlsLayout.PROFILE_NORMAL,
-            w, h, strip));
+            geo != null ? ControlsLayout.PROFILE_TABLETOP : ControlsLayout.PROFILE_NORMAL,
+            w, h, geo));
+    }
+
+    /**
+     * Unity sets the orientation itself, from native code through this
+     * method (ResolutionConfigurator pins it to landscape either way up).
+     * While half folded upright that request is remembered rather than
+     * applied, and applied once the device is flat again.
+     */
+    @Override public void setRequestedOrientation(int requestedOrientation)
+    {
+        engineOrientation = requestedOrientation;
+        if (!upright) super.setRequestedOrientation(requestedOrientation);
+    }
+
+    private void setUpright(boolean allowed)
+    {
+        if (upright == allowed) return;
+        if (allowed) engineOrientation = getRequestedOrientation();
+        upright = allowed;
+        super.setRequestedOrientation(allowed
+            ? ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR : engineOrientation);
     }
 
     private void injectKey(int keyCode, boolean down)

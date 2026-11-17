@@ -163,13 +163,12 @@ final class ControlsLayout
     /**
      * The layout for a profile, with the player's edits applied.
      *
-     * @param stripFraction for the tabletop profile: how much of the window's
-     *        width each side strip beside the dual-screen panel takes. Used only
-     *        to place controls the player has not positioned yet.
+     * @param tabletop for the tabletop profile: how the window is split (null:
+     *        across the middle). Used only to place controls the player has
+     *        not positioned yet.
      */
-    static ControlsLayout load(Context context, String profile, int windowW, int windowH, float stripFraction)
+    static ControlsLayout load(Context context, String profile, int windowW, int windowH, TabletopGeometry tabletop)
     {
-        float windowAspect = windowW / (float) Math.max(1, windowH);
         ControlsLayout layout = new ControlsLayout(profile);
         JSONObject theme = null;
         File themeDir = themeDir(context);
@@ -196,11 +195,13 @@ final class ControlsLayout
 
         if (PROFILE_TABLETOP.equals(profile))
         {
+            float density = context.getResources().getDisplayMetrics().density;
+            TabletopGeometry geo = tabletop != null ? tabletop
+                : TabletopGeometry.halves(windowW, windowH, density);
             List<Control> middle = new ArrayList<>();
             for (Control c : layout.controls)
-                if (!placeForTabletop(c, windowAspect, stripFraction)) middle.add(c);
-            rowInStrip(middle, windowW, windowH, stripFraction,
-                context.getResources().getDisplayMetrics().density);
+                if (!placeForTabletop(c, geo)) middle.add(c);
+            rowInStrip(middle, windowW, windowH, geo, density);
         }
         if (layout.themed) layout.applyPresetDefaults(new File(themeDir, PRESET_FILE));
         for (Control c : layout.controls)
@@ -402,33 +403,34 @@ final class ControlsLayout
 
     // -- tabletop placement --------------------------------------------------
     //
-    // Half folded, the bottom half holds the dual-screen panel in its middle
-    // and leaves a strip either side, which is where the thumbs are. A layout
-    // authored for a 16:9 screen is laid into those strips by keeping each
-    // control's distance from its own side of the screen, measured in a 16:9
-    // box as tall as the bottom half -- which keeps a right-hand cluster's
-    // shape instead of squashing it. Controls authored near the middle (menu
-    // keys, usually) have no strip of their own; they are lined up along the
-    // top of the left one. The player can move all of it.
+    // Half folded, the area under the fold holds the dual-screen panel in its
+    // middle and leaves a strip either side, which is where the thumbs are
+    // (TabletopGeometry). A layout authored for a 16:9 screen is laid into
+    // those strips by keeping each control's distance from its own side of the
+    // screen, measured in a 16:9 box as tall as that area -- which keeps a
+    // right-hand cluster's shape instead of squashing it. Controls authored
+    // near the middle (menu keys, usually) have no strip of their own; they
+    // are lined up along the top of the left one. The player can move all of it.
 
     /** Places a side control; false for a middle one, which rowInStrip places. */
-    private static boolean placeForTabletop(Control c, float windowAspect, float strip)
+    private static boolean placeForTabletop(Control c, TabletopGeometry geo)
     {
-        float halfAspect = windowAspect * 2f;            // the bottom half's own w:h
-        float boxW = (16f / 9f) / halfAspect;            // a 16:9 box, as a fraction of width
+        float top = geo.areaTopFraction(), strip = geo.stripFraction();
+        float areaAspect = geo.windowW / (float) Math.max(1, geo.windowH - geo.areaTop);
+        float boxW = Math.min(1f, (16f / 9f) / areaAspect);   // a 16:9 box, as a fraction of width
         if (c.x >= 0.35f && c.x <= 0.65f) return false;
         if (c.x < 0.35f) c.x = clamp(c.x * boxW, 0f, strip);
         else c.x = clamp(1f - (1f - c.x) * boxW, 1f - strip, 1f);
-        c.y = 0.5f + c.y * 0.5f;
+        c.y = top + c.y * (1f - top);
         return true;
     }
 
-    private static void rowInStrip(List<Control> middle, int windowW, int windowH, float strip, float density)
+    private static void rowInStrip(List<Control> middle, int windowW, int windowH, TabletopGeometry geo, float density)
     {
         if (middle.isEmpty() || windowW <= 0 || windowH <= 0) return;
         java.util.Collections.sort(middle, (a, b) -> Float.compare(a.x, b.x));
-        float stripPx = strip * windowW, gap = 10f * density;
-        float x = gap, y = windowH * 0.5f + gap, rowH = 0f;
+        float stripPx = geo.stripFraction() * windowW, gap = 10f * density;
+        float x = gap, y = windowH * geo.areaTopFraction() + gap, rowH = 0f;
         for (Control c : middle)
         {
             float h = (c.isJoystick() ? JOYSTICK_DP : BUTTON_DP) * c.scale * density;

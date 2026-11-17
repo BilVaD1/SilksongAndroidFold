@@ -342,6 +342,13 @@ XML
                  android:usesCleartextTraffic="true"
                  android:largeHeap="true"
                  android:hasFragileUserData="true" $app_attrs>
+        <!--
+          The window extensions library every foldable ships as a system
+          shared library: where the fold is and whether it is half open
+          (shell/FoldInfo.java). Optional, so devices without it install the
+          app all the same and simply report no fold.
+        -->
+        <uses-library android:name="androidx.window.extensions" android:required="false" />
 $launcher_block
         <!--
           resizeableActivity is TRUE, and that is a fix rather than a default.
