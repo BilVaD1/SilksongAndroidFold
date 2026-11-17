@@ -23,8 +23,11 @@
   open the inventory and pause.
 
 Details are in [On-screen controls and foldables](#on-screen-controls-and-foldables) below.
-The APKs on the upstream Releases page don't include these features; build this branch
-yourself (see [Building from source](#building-from-source)).
+The APKs on the upstream Releases page don't include these features. Get the fork's APK from
+[this fork's Releases](https://github.com/BilVaD1/SilksongAndroidFold/releases/latest)
+instead. It installs as a separate app, **Silksong Fold** (`com.jakobkhansen.silksong.fold`),
+next to the official one, so the official app and its saves stay untouched. Setup is the same
+as below, and Steam cloud saves carry over.
 
 ### Verified on
 
@@ -71,8 +74,9 @@ Steam integration for game files and cloud saves.
 ## Setup
 
 1. Download the latest APK from
-   [Releases](https://github.com/jakobkhansen/SilksongAndroid/releases/latest)
-   and install it.
+   [Releases](https://github.com/BilVaD1/SilksongAndroidFold/releases/latest)
+   and install it (for the official build without the fork's features, use the
+   [upstream Releases](https://github.com/jakobkhansen/SilksongAndroid/releases/latest)).
 2. Supply your own game files. Either copy them across from your PC yourself,
    or let the app fetch them for you by signing in to Steam.
 3. Press the button. The app fetches everything it needs and builds the game.
