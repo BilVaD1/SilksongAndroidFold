@@ -131,8 +131,12 @@ and so on), so the game's own bindings apply. **Edit layout** opens the editor:
 tap a control to select it, drag to move it, pinch or use −/+ to resize it, hide
 the ones you don't need, and set the opacity. There are two layouts to edit,
 *Full screen* and *Half folded*, because a half-open foldable is held
-differently. The controls hide while a controller is in use and come back on
-the next touch.
+differently. You can also adjust the layout without leaving the game: hold the
+✎ button at the top of the screen, then drag and pinch the controls. The game
+pauses while you edit. **Done** (or Back) saves the layout, **Cancel** discards
+your changes. This edits whichever layout is in use (full screen or half
+folded). It only moves and resizes controls. The controls hide while a
+controller is in use and come back on the next touch.
 
 **GameHub layouts.** A layout made in GameHub's *Keys and layout* editor for the
 PC game works as-is: export or download it as a `.gtheme` file and choose

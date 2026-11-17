@@ -54,6 +54,10 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     private TouchControlsView controls;
     private TabletopMode tabletop;
     private boolean controlsHiddenForPad;
+    private InGameControlsEditor editor;
+    // The engine paused by us for the in-game editor, not by the lifecycle.
+    private boolean pausedForEdit;
+    private boolean resumed;
     private final PadRumble padRumble = new PadRumble();
 
     @Override protected void onCreate(Bundle savedInstanceState)
@@ -88,6 +92,26 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
             root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
                 if (r - l != or - ol || b - t != ob - ot) root.post(this::loadControls);
             });
+            editor = new InGameControlsEditor(this, root, controls, new InGameControlsEditor.Host()
+            {
+                @Override public void onEditingChanged(boolean editing)
+                {
+                    // Nothing can hurt Hornet while the controls are being moved.
+                    if (mUnityPlayer == null) return;
+                    if (editing && !pausedForEdit)
+                    {
+                        pausedForEdit = true;
+                        mUnityPlayer.onPause();
+                    }
+                    else if (!editing && pausedForEdit)
+                    {
+                        pausedForEdit = false;
+                        if (resumed) mUnityPlayer.onResume();
+                    }
+                }
+
+                @Override public void reload() { loadControls(); }
+            });
         }
         if (panelDisplay != null)
         {
@@ -103,6 +127,9 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     private void loadControls()
     {
         if (controls == null || root.getWidth() <= 0 || root.getHeight() <= 0) return;
+        // Mid-edit (the window changed shape, say): keep what was moved so far.
+        if (editor != null && editor.isEditing() && controls.getLayout() != null)
+            controls.getLayout().save(this);
         boolean half = tabletop != null && tabletop.isActive();
         int w = root.getWidth(), h = root.getHeight();
         float strip = (w - TabletopMode.panelWidth(w, h)) / 2f / w;
@@ -164,6 +191,7 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     private void noticePad(android.view.InputEvent event)
     {
         if (controls == null || controlsHiddenForPad) return;
+        if (editor != null && editor.isEditing()) return;
         int source = event.getSource();
         if ((source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
             || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK)
@@ -171,6 +199,7 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
             controlsHiddenForPad = true;
             controls.releaseAll();
             controls.setVisibility(View.GONE);
+            if (editor != null) editor.setButtonVisible(false);
         }
     }
 
@@ -179,6 +208,12 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     // ones it leaves.
     @Override public boolean dispatchKeyEvent(KeyEvent event)
     {
+        // Back while editing the controls is "Done", not a key for the game.
+        if (editor != null && editor.isEditing() && event.getKeyCode() == KeyEvent.KEYCODE_BACK)
+        {
+            if (event.getAction() == KeyEvent.ACTION_UP) editor.finish(true);
+            return true;
+        }
         padRumble.notice(event);
         noticePad(event);
         return super.dispatchKeyEvent(event);
@@ -207,6 +242,7 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
         {
             controlsHiddenForPad = false;
             controls.setVisibility(View.VISIBLE);
+            if (editor != null) editor.setButtonVisible(true);
         }
         return super.dispatchTouchEvent(event);
     }
@@ -250,6 +286,7 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     @Override protected void onResume()
     {
         super.onResume();
+        resumed = true;
         if (mUnityPlayer != null) mUnityPlayer.onResume();
         if (tabletop != null) tabletop.onResume();
         // Back from the editor, or from anywhere the layout could have changed.
@@ -259,7 +296,12 @@ public class PlayerActivity extends Activity implements IUnityPlayerLifecycleEve
     @Override protected void onPause()
     {
         super.onPause();
-        if (mUnityPlayer != null) mUnityPlayer.onPause();
+        resumed = false;
+        // Leaving mid-edit keeps the edits. The engine is already paused if
+        // the editor was open, and is not to be paused a second time.
+        boolean alreadyPaused = pausedForEdit;
+        if (editor != null) editor.finish(true);
+        if (mUnityPlayer != null && !alreadyPaused) mUnityPlayer.onPause();
         if (tabletop != null) tabletop.onPause();
         if (controls != null) controls.releaseAll();
     }
