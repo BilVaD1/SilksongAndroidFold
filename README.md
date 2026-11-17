@@ -1,4 +1,45 @@
-# Silksong Android
+# Silksong Android — Fold edition
+
+> **This is a fork of [jakobkhansen/SilksongAndroid](https://github.com/jakobkhansen/SilksongAndroid).**
+> All the core work (the port itself, dual screen, Steam integration, mod support) is
+> upstream: go there for the official releases, issues and the latest changes. This fork
+> adds on-screen controls and foldable support on top of it, on the `fold` branch.
+
+## What this fork adds
+
+- **Half-folded (tabletop) mode for foldables**: hold the phone half open like a laptop and
+  the game moves to the top half, with the dual-screen menu on the bottom half. Opening the
+  phone flat gives the game the whole screen again. Fold position and posture come from
+  Android's window extensions (Jetpack WindowManager), so it is not tied to one model.
+- **On-screen touch controls**: buttons and a floating stick drawn over the game, with
+  separate *Full screen* and *Half folded* layouts, opacity, and a layout editor in the
+  launcher.
+- **In-game controls editor**: hold ✎ at the top of the screen to move and resize the
+  controls without leaving the game (the game pauses while you edit).
+- **GameHub layout import**: `.gtheme` layouts made in GameHub's *Keys and layout* editor
+  import as-is, icons included; buttons mapped to keyboard keys or Xbox buttons both work.
+- **Controller improvements**: rumble on the controller itself (both motors), and
+  **Create**/**Options** on PlayStation controllers (DualShock 4, DualSense, DualSense Edge)
+  open the inventory and pause.
+
+Details are in [On-screen controls and foldables](#on-screen-controls-and-foldables) below.
+The APKs on the upstream Releases page don't include these features; build this branch
+yourself (see [Building from source](#building-from-source)).
+
+### Verified on
+
+- **Samsung Galaxy Z Fold 8 Ultra**: half-folded mode, on-screen controls, in-game editor
+  and GameHub layout import tested on device.
+
+Other foldables (passport-shaped ones like the Pixel Fold or OnePlus Open, and flip phones)
+should work through the same code path but have not been tested on real hardware yet.
+Reports are welcome.
+
+### Demo
+
+<!-- Video from the Galaxy Z Fold 8 Ultra goes here (drag the file into GitHub's README editor to upload it). -->
+
+---
 
 **Hollow Knight: Silksong** Android port with dual-screen capabilites and optional
 Steam integration for game files and cloud saves.
