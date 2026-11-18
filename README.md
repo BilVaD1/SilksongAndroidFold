@@ -42,7 +42,7 @@ Reports are welcome.
 
 Half-folded mode with on-screen controls on a Galaxy Z Fold 8 Ultra:
 
-https://github.com/user-attachments/assets/b9c84966-438d-44f8-9d78-1174c7dddb8a
+https://github.com/user-attachments/assets/d154af35-8c03-464b-84d0-3d62784eda82
 
 ---
 
